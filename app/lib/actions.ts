@@ -43,21 +43,26 @@ export const createInvoice = async (data: FormData) => {
 }
 
 export async function updateInvoice(id: string, formData: FormData) {
-    const { customerId, amount, status } = CreateInvoice.parse({
-        customerId: formData.get('customerId'),
-        amount: formData.get('amount'),
-        status: formData.get('status'),
-    });
+    try {
 
-    const amountInCents = amount * 100;
+        const { customerId, amount, status } = CreateInvoice.parse({
+            customerId: formData.get('customerId'),
+            amount: formData.get('amount'),
+            status: formData.get('status'),
+        });
 
-    await sql`
-      UPDATE invoices
-      SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
-      WHERE id = ${id}
-    `;
+        const amountInCents = amount * 100;
 
-    revalidatePath('/dashboard/invoices');
+        await sql`
+          UPDATE invoices
+          SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+          WHERE id = ${id}
+        `;
+
+        revalidatePath('/dashboard/invoices');
+    } catch (error) {
+        console.log(error)
+    }
     redirect('/dashboard/invoices');
 }
 
