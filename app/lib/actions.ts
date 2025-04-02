@@ -9,9 +9,15 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' })
 
 const FormSchema = z.object({
     id: z.string(),
-    customerId: z.string(),
-    amount: z.coerce.number(),
-    status: z.enum(['paid', 'pending']),
+    customerId: z.string({
+        invalid_type_error: 'Please select a customer'
+    }),
+    amount: z.coerce.number().gt(0, {
+        message: 'Please enter a valid amount'
+    }),
+    status: z.enum(['paid', 'pending'], {
+        invalid_type_error: 'Please select a status for the invoice'
+    }),
     date: z.string()
 })
 
@@ -20,25 +26,40 @@ const CreateInvoice = FormSchema.omit({
     date: true,
 })
 
-export const createInvoice = async (data: FormData) => {
-    try {
-        const { customerId, amount, status } = CreateInvoice.parse({
-            customerId: data.get('customerId'),
-            amount: data.get('amount'),
-            status: data.get('status'),
-        })
-        const amountInCents = amount * 100
-        const date = new Date().toISOString().slice(0, 10)
+export type CreateInvoiceState = {
+    errors?: {
+        customerId?: string[]
+        amount?: string[]
+        status?: string[]
+    }
 
-        await sql`
+    message?: string | null
+}
+
+export const createInvoice = async (prevState: CreateInvoiceState, data: FormData) => {
+    const validatedFields = CreateInvoice.safeParse({
+        customerId: data.get('customerId'),
+        amount: data.get('amount'),
+        status: data.get('status'),
+    })
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+            message: 'Missing Fields. Failed to Create Invoice.',
+        };
+    }
+
+    const { customerId, amount, status } = validatedFields.data;
+    const amountInCents = amount * 100
+    const date = new Date().toISOString().slice(0, 10)
+
+    await sql`
             INSERT INTO invoices (customer_id, amount, status, date)
             VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
         `;
 
-        revalidatePath('/dashboard/invoices')
-    } catch (error) {
-        console.log(error)
-    }
+    revalidatePath('/dashboard/invoices')
     redirect('/dashboard/invoices')
 }
 
